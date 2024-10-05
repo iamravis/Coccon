@@ -1,4 +1,4 @@
-# translate_apple_test.py
+# translate_nvidia_test.py
 
 import json
 import time
@@ -65,14 +65,14 @@ def initialize_translator(model_name='Helsinki-NLP/opus-mt-en-hi'):
     tokenizer = MarianTokenizer.from_pretrained(model_name)
     model = MarianMTModel.from_pretrained(model_name)
 
-    # Check for MPS (Metal Performance Shaders) availability
-    if torch.backends.mps.is_available():
-        device = torch.device('mps')
+    # Check for CUDA availability
+    if torch.cuda.is_available():
+        device = torch.device('cuda')
         model.to(device)
-        print("Model loaded on Apple GPU (MPS).")
+        print("Model loaded on NVIDIA GPU (CUDA).")
     else:
-        raise EnvironmentError(
-            "Apple GPU with MPS support not found. Ensure you're running on an Apple Silicon Mac with PyTorch MPS enabled.")
+        device = torch.device('cpu')
+        print("CUDA not available. Model loaded on CPU.")
 
     return model, tokenizer, device
 
@@ -212,7 +212,8 @@ def translate_text_batch(model, tokenizer, device, texts, batch_size=2):
         translated_texts.extend(translated_batch)
         print(f"Translated batch {i // batch_size + 1}/{total_batches}")
         # Clear GPU cache
-        torch.mps.empty_cache()
+        if device.type == 'cuda':
+            torch.cuda.empty_cache()
         time.sleep(0.1)  # Optional: Adjust based on performance
     return translated_texts
 
