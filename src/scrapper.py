@@ -47,10 +47,10 @@ def fetch_content(url):
 
 
 # Create the directory if it doesn't exist
-os.makedirs('../data/rag_data', exist_ok=True)
+os.makedirs('../data/finetune_data', exist_ok=True)
 
 # File to store all content
-output_file = '../data/rag_data/all_content.txt'
+output_file = '../data/finetune_data/all_content.txt'
 
 with open(output_file, 'w', encoding='utf-8') as file:
     for url in urls:
