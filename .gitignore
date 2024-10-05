@@ -1,0 +1,44 @@
+# Environment variables and secrets
+.env
+
+# Virtual environment
+venv/
+env/
+
+# Compiled Python files
+*.pyc
+__pycache__/
+
+# Logs
+*.log
+
+# IDE-specific files
+.vscode/
+.idea/
+
+# Dependency directories
+node_modules/
+
+# Build outputs
+dist/
+build/
+
+# Operating system files
+.DS_Store
+Thumbs.db
+
+# Temporary files
+*.tmp
+*.swp
+
+# Database files
+*.db
+*.sqlite3
+
+# Model files (if using machine learning)
+*.h5
+*.pkl
+
+# Configuration files (excluding example configs)
+config.ini
+!config.example.ini
