@@ -120,7 +120,7 @@ if len(messages) == 0:
 def ChatMessage(msg, user):
     bubble_class = "chat-end" if user else "chat-start"
     bubble_color = "chat-bubble-user" if user else "chat-bubble-assistant"
-    role = "You" if user else "Assistant"
+    role = "You" if user else "Cocoonie"
 
     md = _render_local_md(msg)
     return Div(
@@ -355,7 +355,7 @@ def index():
                         Div(cls="flex items-center justify-between mb-2")(
                             Div(cls="flex items-center gap-2")(
                                 Img(src="../logo.png", alt="Logo", cls="h-8 w-8"),  # Adjust size as needed
-                                H2("ReadWise", cls="card-title text-2xl font-bold font-fira-code")
+                                H2("Cocoonie", cls="card-title text-2xl font-bold font-fira-code")
                             ),
                         ),
                         Div(cls="border-b border-gray-300 w-full")
