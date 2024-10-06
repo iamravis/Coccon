@@ -1,0 +1,47 @@
+Defaulting to user installation because normal site-packages is not writeable
+Collecting claudette
+  Downloading claudette-0.0.10-py3-none-any.whl.metadata (31 kB)
+Requirement already satisfied: fastcore>=1.7.10 in /home/admin/.local/lib/python3.10/site-packages (from claudette) (1.7.11)
+Collecting anthropic (from claudette)
+  Downloading anthropic-0.35.0-py3-none-any.whl.metadata (18 kB)
+Collecting toolslm (from claudette)
+  Downloading toolslm-0.0.6-py3-none-any.whl.metadata (3.9 kB)
+Requirement already satisfied: packaging in /home/admin/.local/lib/python3.10/site-packages (from fastcore>=1.7.10->claudette) (24.1)
+Requirement already satisfied: anyio<5,>=3.5.0 in /home/admin/.local/lib/python3.10/site-packages (from anthropic->claudette) (4.6.0)
+Requirement already satisfied: distro<2,>=1.7.0 in /usr/lib/python3/dist-packages (from anthropic->claudette) (1.7.0)
+Requirement already satisfied: httpx<1,>=0.23.0 in /home/admin/.local/lib/python3.10/site-packages (from anthropic->claudette) (0.27.2)
+Collecting jiter<1,>=0.4.0 (from anthropic->claudette)
+  Downloading jiter-0.5.0-cp310-cp310-manylinux_2_17_x86_64.manylinux2014_x86_64.whl.metadata (3.6 kB)
+Requirement already satisfied: pydantic<3,>=1.9.0 in /home/admin/.local/lib/python3.10/site-packages (from anthropic->claudette) (2.9.2)
+Requirement already satisfied: sniffio in /home/admin/.local/lib/python3.10/site-packages (from anthropic->claudette) (1.3.1)
+Requirement already satisfied: tokenizers>=0.13.0 in /home/admin/.local/lib/python3.10/site-packages (from anthropic->claudette) (0.13.3)
+Requirement already satisfied: typing-extensions<5,>=4.7 in /home/admin/.local/lib/python3.10/site-packages (from anthropic->claudette) (4.12.2)
+Requirement already satisfied: beautifulsoup4 in /home/admin/.local/lib/python3.10/site-packages (from toolslm->claudette) (4.12.3)
+Collecting html2text (from toolslm->claudette)
+  Downloading html2text-2024.2.26.tar.gz (56 kB)
+  Preparing metadata (setup.py): started
+  Preparing metadata (setup.py): finished with status 'done'
+Collecting llms-txt (from toolslm->claudette)
+  Downloading llms_txt-0.0.4-py3-none-any.whl.metadata (11 kB)
+Requirement already satisfied: idna>=2.8 in /home/admin/.local/lib/python3.10/site-packages (from anyio<5,>=3.5.0->anthropic->claudette) (3.10)
+Requirement already satisfied: exceptiongroup>=1.0.2 in /home/admin/.local/lib/python3.10/site-packages (from anyio<5,>=3.5.0->anthropic->claudette) (1.2.2)
+Requirement already satisfied: certifi in /home/admin/.local/lib/python3.10/site-packages (from httpx<1,>=0.23.0->anthropic->claudette) (2024.8.30)
+Requirement already satisfied: httpcore==1.* in /home/admin/.local/lib/python3.10/site-packages (from httpx<1,>=0.23.0->anthropic->claudette) (1.0.6)
+Requirement already satisfied: h11<0.15,>=0.13 in /home/admin/.local/lib/python3.10/site-packages (from httpcore==1.*->httpx<1,>=0.23.0->anthropic->claudette) (0.14.0)
+Requirement already satisfied: annotated-types>=0.6.0 in /home/admin/.local/lib/python3.10/site-packages (from pydantic<3,>=1.9.0->anthropic->claudette) (0.7.0)
+Requirement already satisfied: pydantic-core==2.23.4 in /home/admin/.local/lib/python3.10/site-packages (from pydantic<3,>=1.9.0->anthropic->claudette) (2.23.4)
+Requirement already satisfied: soupsieve>1.2 in /home/admin/.local/lib/python3.10/site-packages (from beautifulsoup4->toolslm->claudette) (2.6)
+Downloading claudette-0.0.10-py3-none-any.whl (22 kB)
+Downloading anthropic-0.35.0-py3-none-any.whl (894 kB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 894.0/894.0 kB 70.4 MB/s eta 0:00:00
+Downloading toolslm-0.0.6-py3-none-any.whl (13 kB)
+Downloading jiter-0.5.0-cp310-cp310-manylinux_2_17_x86_64.manylinux2014_x86_64.whl (318 kB)
+Downloading llms_txt-0.0.4-py3-none-any.whl (13 kB)
+Building wheels for collected packages: html2text
+  Building wheel for html2text (setup.py): started
+  Building wheel for html2text (setup.py): finished with status 'done'
+  Created wheel for html2text: filename=html2text-2024.2.26-py3-none-any.whl size=33111 sha256=316443d339163f66fe64683e015a565a8318c62447c8c7bf74497f639e428bd9
+  Stored in directory: /home/admin/.cache/pip/wheels/f3/96/6d/a7eba8f80d31cbd188a2787b81514d82fc5ae6943c44777659
+Successfully built html2text
+Installing collected packages: jiter, html2text, llms-txt, anthropic, toolslm, claudette
+Successfully installed anthropic-0.35.0 claudette-0.0.10 html2text-2024.2.26 jiter-0.5.0 llms-txt-0.0.4 toolslm-0.0.6

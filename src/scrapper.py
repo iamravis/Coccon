@@ -9,27 +9,11 @@ load_dotenv()
 API_KEY = os.getenv('JINA_AI_READER_API_KEY')
 
 urls = [
-    "https://www.nhs.uk/pregnancy/keeping-well/have-a-healthy-diet/",
-    "https://www.nhs.uk/pregnancy/keeping-well/vegetarian-or-vegan-and-pregnant/",
-    "https://www.nhs.uk/pregnancy/keeping-well/foods-to-avoid/",
-    "https://www.nhs.uk/pregnancy/keeping-well/vitamins-supplements-and-nutrition/",
-    "https://www.nhs.uk/pregnancy/keeping-well/exercise/",
-    "https://www.nhs.uk/pregnancy/keeping-well/medicines/",
-    "https://www.nhs.uk/pregnancy/keeping-well/mental-health/",
-    "https://www.nhs.uk/pregnancy/keeping-well/depression/",
-    "https://www.nhs.uk/pregnancy/keeping-well/sex/",
-    "https://www.nhs.uk/pregnancy/keeping-well/travelling/",
-    "https://www.nhs.uk/pregnancy/keeping-well/your-health-at-work/",
-    "https://www.nhs.uk/pregnancy/keeping-well/your-babys-movements/",
-    "https://www.nhs.uk/pregnancy/keeping-well/reducing-the-risk-of-stillbirth/",
-    "https://www.nhs.uk/pregnancy/keeping-well/drinking-alcohol-while-pregnant/",
-    "https://www.nhs.uk/pregnancy/keeping-well/stop-smoking/",
-    "https://www.nhs.uk/pregnancy/keeping-well/illegal-drugs/",
-    "https://www.nhs.uk/pregnancy/keeping-well/vaccinations/",
-    "https://www.nhs.uk/pregnancy/keeping-well/flu-jab/",
-    "https://www.nhs.uk/pregnancy/keeping-well/whooping-cough-vaccination/",
-    "https://www.nhs.uk/pregnancy/keeping-well/infections-that-may-affect-your-baby/",
-    "https://www.nhs.uk/pregnancy/keeping-well/pregnancy-and-covid-19/"
+    "https://www.nhs.uk/conditions/pre-eclampsia/",
+    "https://www.nhs.uk/conditions/gestational-diabetes/",
+    "https://www.nhs.uk/conditions/baby/",
+    "https://www.nhs.uk/conditions/caesarean-section/"
+    
 ]
 
 
@@ -50,7 +34,7 @@ def fetch_content(url):
 os.makedirs('../data/finetune_data', exist_ok=True)
 
 # File to store all content
-output_file = '../data/finetune_data/all_content.txt'
+output_file = '../data/finetune_data/all_content_7.txt'
 
 with open(output_file, 'w', encoding='utf-8') as file:
     for url in urls:
