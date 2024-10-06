@@ -5,7 +5,7 @@
 # Standard Libraries
 import logging
 import uuid
-from functools import partial, lru_cache
+from functools import partial
 from threading import Lock
 import os
 import asyncio
@@ -24,17 +24,26 @@ from langchain_mistralai import MistralAIEmbeddings
 from langchain.schema import Document
 from langchain.schema import HumanMessage, SystemMessage
 from pydantic import BaseModel, Field
-from typing import Literal, List
+from typing import Literal, List, Annotated
 from langchain_mistralai.chat_models import ChatMistralAI
 
 # Language detection
 from langdetect import detect
+
+# Import for langgraph
+import operator
+from typing_extensions import TypedDict
+from langgraph.graph import StateGraph, END
+
+# Import for web search
+from langchain_community.tools.tavily_search import TavilySearchResults
 
 # Load environment variables from .env file
 load_dotenv()
 
 # Get the API key from environment variable
 MISTRAL_API_KEY = os.getenv('MISTRAL_API_KEY')
+TAVILY_API_KEY = os.getenv('TAVILY_API_KEY')
 
 # Model IDs
 FINE_TUNED_MODEL_ID = 'ft:open-mistral-nemo:5aa386c9:20241006:34d17884'  # Replace with your model ID
@@ -110,7 +119,7 @@ app, rt = fast_app()
 
 # Store the default system prompt (will be adjusted based on language)
 default_system_prompt = """
-You are an assistant that answers user questions.
+Your name is Cocoonie, your wellbeing assistant designed to support new mothers around the world. I’m here to listen to your concerns, guide you to trusted mental and physical health resources, and work with you to co-create wellbeing strategies that suit your needs.  I’m not a human or a doctor, nor am I designed to replace them, I’m just an AI tool to help you focus on self-care. You can speak to me in your own words, and I currently understand both Hindi and English. Let’s start with what matters most: How are you today?
 """
 
 if len(messages) == 0:
@@ -192,6 +201,9 @@ retriever = setup_vector_store()
 mistral_model = FINE_TUNED_MODEL_ID  # Use your fine-tuned model ID
 llm = ChatMistralAI(model=mistral_model, temperature=0.7)
 
+# Initialize the web search tool
+web_search_tool = TavilySearchResults(k=3)
+
 # Router Data Model
 class RouteQuery(BaseModel):
     """Route a user query to the most relevant datasource."""
@@ -229,26 +241,282 @@ Give a binary 'yes' or 'no' score to indicate whether the document is relevant t
 doc_grader_prompt = "Here is the retrieved document: \n\n {document} \n\n Here is the user question: \n\n {question}"
 
 # RAG Prompt (will be adjusted based on language)
-rag_prompt_template = """You are an assistant for question-answering tasks.
+rag_prompt_template = """
+You are a multilingual healthcare assistant specializing in supporting new mothers.
 
-Use the following retrieved context to answer the question.
+- **Language Handling:**
+  - If the question is in Hindi, respond in Hindi.
+  - If the question is in English, respond in English.
+  
+- **Response Guidelines:**
+  - Use the retrieved context to answer the question.
+  - If you don't know the answer, simply say, "I don't know."
+  - Keep the answer concise, using at most three sentences.
 
-If you don't know the answer, just say that you don't know.
+**Question:** {question}
 
-Use at most three sentences and keep the answer concise.
+**Context:** {context}
 
-Question: {question}
+**Answer:**
+"""
 
-Context: {context}
-
-Answer:"""
 
 # Function to format documents
 def format_docs(docs):
     return "\n\n".join(doc.page_content for doc in docs)
 
+# Hallucination Grader Data Model
+class HallucinationGrade(BaseModel):
+    """Binary score to check if the generation is grounded in the documents."""
+    binary_score: str = Field(description="Is the generation grounded in the documents? 'yes' or 'no'")
+
+# LLM with structured output for hallucination grading
+structured_llm_hallucination_grader = llm.with_structured_output(HallucinationGrade)
+
+# Hallucination grader instructions
+hallucination_grader_instructions = """You are a grader checking if the assistant's response is grounded in the provided documents.
+
+Compare the assistant's response with the documents to see if it is supported.
+
+Give a binary 'yes' or 'no' score to indicate whether the response is grounded."""
+
+# Hallucination grader prompt
+hallucination_grader_prompt = """Assistant's Response: {generation}
+
+Documents: {documents}
+
+Is the assistant's response grounded in the documents?"""
+
+# Answer Grader Data Model
+class AnswerGrade(BaseModel):
+    """Binary score to check if the assistant's response addresses the user's question."""
+    binary_score: str = Field(description="Does the response address the question? 'yes' or 'no'")
+
+# LLM with structured output for answer grading
+structured_llm_answer_grader = llm.with_structured_output(AnswerGrade)
+
+# Answer grader instructions
+answer_grader_instructions = """You are a grader checking if the assistant's response addresses the user's question.
+
+Give a binary 'yes' or 'no' score to indicate whether the response addresses the question."""
+
+# Answer grader prompt
+answer_grader_prompt = """User's Question: {question}
+
+Assistant's Response: {generation}
+
+Does the assistant's response address the user's question?"""
+
 # ============================================
-# Asynchronous function to generate assistant response using RAG
+# Define GraphState for langgraph
+# ============================================
+
+class GraphState(TypedDict):
+    question: str  # User question
+    generation: str  # LLM generation
+    web_search: str  # Binary decision to run web search
+    max_retries: int  # Max number of retries for answer generation
+    answers: int  # Number of answers generated
+    loop_step: Annotated[int, operator.add]
+    documents: List[Document]  # List of retrieved documents
+
+# ============================================
+# Define Nodes for langgraph
+# ============================================
+
+def retrieve(state):
+    """Retrieve documents from vectorstore."""
+    print("---RETRIEVE---")
+    question = state["question"]
+
+    # Retrieve documents
+    documents = retriever.get_relevant_documents(question)
+    return {"documents": documents}
+
+def generate(state):
+    """Generate answer using RAG on retrieved documents."""
+    print("---GENERATE---")
+    question = state["question"]
+    documents = state["documents"]
+    loop_step = state.get("loop_step", 0)
+
+    # RAG generation
+    docs_txt = format_docs(documents)
+    rag_prompt_formatted = rag_prompt_template.format(context=docs_txt, question=question)
+    response = llm.invoke([HumanMessage(content=rag_prompt_formatted)])
+    return {"generation": response.content, "loop_step": loop_step + 1}
+
+def grade_documents(state):
+    """Determines whether the retrieved documents are relevant to the question."""
+    print("---CHECK DOCUMENT RELEVANCE TO QUESTION---")
+    question = state["question"]
+    documents = state["documents"]
+
+    # Score each doc
+    filtered_docs = []
+    web_search = "No"
+    for doc in documents:
+        doc_grader_prompt_formatted = doc_grader_prompt.format(document=doc.page_content, question=question)
+        score = structured_llm_doc_grader.invoke([SystemMessage(content=doc_grader_instructions), HumanMessage(content=doc_grader_prompt_formatted)])
+        grade = score.binary_score.lower()
+        if grade == "yes":
+            print("---GRADE: DOCUMENT RELEVANT---")
+            filtered_docs.append(doc)
+        else:
+            print("---GRADE: DOCUMENT NOT RELEVANT---")
+            web_search = "Yes"
+    return {"documents": filtered_docs, "web_search": web_search}
+
+# def web_search(state):
+#     """Web search based on the question."""
+#     print("---WEB SEARCH---")
+#     question = state["question"]
+#     documents = state.get("documents", [])
+
+#     # Web search
+#     search_results = web_search_tool.invoke({"query": question})
+#     web_documents = [Document(page_content=result["snippet"]) for result in search_results]
+#     documents.extend(web_documents)
+#     return {"documents": documents}
+
+def web_search(state):
+    """Web search based on the question."""
+    print("---WEB SEARCH---")
+    question = state["question"]
+    documents = state.get("documents", [])
+
+    # Perform web search
+    search_results = web_search_tool.invoke({"query": question})
+
+    # Initialize an empty list to store web documents
+    web_documents = []
+
+    # Check if search_results is a list
+    if isinstance(search_results, list):
+        for result in search_results:
+            if isinstance(result, dict):
+                # Try to extract 'content' or 'snippet'
+                content = result.get("content") or result.get("snippet") or ''
+                web_documents.append(Document(page_content=content))
+            elif isinstance(result, str):
+                # If result is a string, use it directly
+                web_documents.append(Document(page_content=result))
+            else:
+                print(f"Unexpected type in search_results: {type(result)}")
+    elif isinstance(search_results, str):
+        # If search_results is a single string, use it directly
+        web_documents.append(Document(page_content=search_results))
+    else:
+        print(f"Unexpected type for search_results: {type(search_results)}")
+
+    # Extend the documents list with web_documents
+    documents.extend(web_documents)
+    return {"documents": documents}
+
+def route_question(state):
+    """Route question to web search or vectorstore."""
+    print("---ROUTE QUESTION---")
+    routing_prompt = [SystemMessage(content=router_instructions), HumanMessage(content=state["question"])]
+    source = structured_llm_router.invoke(routing_prompt)
+    if source.datasource == 'websearch':
+        print("---ROUTE QUESTION TO WEB SEARCH---")
+        return "websearch"
+    elif source.datasource == 'vectorstore':
+        print("---ROUTE QUESTION TO VECTORSTORE---")
+        return "retrieve"
+
+def decide_to_generate(state):
+    """Determines whether to generate an answer or add web search."""
+    print("---ASSESS GRADED DOCUMENTS---")
+    web_search = state["web_search"]
+    if web_search == "Yes":
+        print("---DECISION: INCLUDE WEB SEARCH---")
+        return "websearch"
+    else:
+        print("---DECISION: GENERATE ANSWER---")
+        return "generate"
+
+def grade_generation_v_documents_and_question(state):
+    """Determines whether the generation is grounded and addresses the question."""
+    
+    question = state["question"]
+    documents = state["documents"]
+    generation = state["generation"]
+    max_retries = state.get("max_retries", 3)
+    loop_step = state.get("loop_step", 0)
+
+    hallucination_grader_prompt_formatted = hallucination_grader_prompt.format(documents=format_docs(documents), generation=generation)
+    score = structured_llm_hallucination_grader.invoke([SystemMessage(content=hallucination_grader_instructions), HumanMessage(content=hallucination_grader_prompt_formatted)])
+    grade = score.binary_score.lower()
+
+    if grade == "yes":
+        print("---DECISION: GENERATION IS GROUNDED IN DOCUMENTS---")
+        # Check if the response addresses the question
+        answer_grader_prompt_formatted = answer_grader_prompt.format(question=question, generation=generation)
+        score = structured_llm_answer_grader.invoke([SystemMessage(content=answer_grader_instructions), HumanMessage(content=answer_grader_prompt_formatted)])
+        grade = score.binary_score.lower()
+        if grade == "yes":
+            print("---DECISION: GENERATION ADDRESSES QUESTION---")
+            return END
+        elif loop_step < max_retries:
+            print("---DECISION: GENERATION DOES NOT ADDRESS QUESTION, RETRYING---")
+            return "generate"
+        else:
+            print("---DECISION: MAX RETRIES REACHED---")
+            return END
+    elif loop_step < max_retries:
+        print("---DECISION: GENERATION IS NOT GROUNDED, RETRYING---")
+        return "retrieve"
+    else:
+        print("---DECISION: MAX RETRIES REACHED---")
+        return END
+
+# ============================================
+# Build Graph using langgraph
+# ============================================
+
+workflow = StateGraph(GraphState)
+
+# Add nodes
+workflow.add_node("websearch", web_search)
+workflow.add_node("retrieve", retrieve)
+workflow.add_node("grade_documents", grade_documents)
+workflow.add_node("generate", generate)
+#workflow.add_node("grade_generation", grade_generation_v_documents_and_question)
+
+# Define the entry point and edges
+workflow.set_conditional_entry_point(
+    route_question,
+    {
+        "websearch": "websearch",
+        "retrieve": "retrieve",
+    },
+)
+
+workflow.add_edge("websearch", "generate")
+workflow.add_edge("retrieve", "grade_documents")
+workflow.add_conditional_edges(
+    "grade_documents",
+    decide_to_generate,
+    {
+        "websearch": "websearch",
+        "generate": "generate",
+    },
+)
+# workflow.add_edge("generate", "grade_generation")
+# workflow.add_conditional_edges(
+#     "grade_generation",
+#     lambda state: END,
+#     {
+#         END: END,
+#     },
+# )
+
+# Compile the graph
+graph = workflow.compile()
+
+# ============================================
+# Asynchronous function to generate assistant response using RAG and langgraph
 # ============================================
 
 async def generate_assistant_response():
@@ -289,47 +557,22 @@ async def generate_assistant_response():
     else:
         messages.insert(0, {"role": "system", "content": system_prompt})
 
-    # Route the question
-    routing_prompt = [SystemMessage(content=router_instructions), HumanMessage(content=user_message)]
-    routing_decision = structured_llm_router.invoke(routing_prompt)
-    datasource = routing_decision.datasource
+    # Initialize the state
+    state = GraphState(
+        question=user_message,
+        generation='',
+        web_search='No',
+        max_retries=3,
+        answers=0,
+        loop_step=0,
+        documents=[]
+    )
 
-    # Initialize documents
-    documents = []
+    # Run the graph
+    result_state = graph.invoke(state)
 
-    if datasource == 'vectorstore':
-        # Retrieve documents from vectorstore
-        docs = retriever.get_relevant_documents(user_message)
-
-        # Grade documents
-        filtered_docs = []
-        web_search_flag = False
-        for doc in docs:
-            doc_grader_prompt_formatted = doc_grader_prompt.format(document=doc.page_content, question=user_message)
-            grading_prompt = [SystemMessage(content=doc_grader_instructions), HumanMessage(content=doc_grader_prompt_formatted)]
-            score = structured_llm_doc_grader.invoke(grading_prompt)
-            grade = score.binary_score.lower()
-            if grade == 'yes':
-                filtered_docs.append(doc)
-            else:
-                web_search_flag = True  # Set flag to use web search
-        documents = filtered_docs
-
-    # If no relevant documents or web search is needed
-    if datasource == 'websearch' or not documents:
-        # Implement web search functionality or return a default message
-        if user_language == 'hi':
-            assistant_reply = "क्षमा करें, मुझे कोई प्रासंगिक जानकारी नहीं मिली। क्या आप अपना प्रश्न स्पष्ट कर सकते हैं?"
-        else:
-            assistant_reply = "Sorry, I couldn't find any relevant information. Could you please clarify your question?"
-        return assistant_reply
-
-    # Generate answer using retrieved documents
-    context = format_docs(documents)
-    rag_prompt_formatted = rag_prompt.format(context=context, question=user_message)
-    generation_prompt = [SystemMessage(content=system_prompt), HumanMessage(content=rag_prompt_formatted)]
-    response = llm.invoke(generation_prompt)
-    assistant_reply = response.content
+    # Retrieve the assistant's reply from the result state
+    assistant_reply = result_state.get('generation', 'Sorry, I could not generate a response.')
 
     return assistant_reply
 
